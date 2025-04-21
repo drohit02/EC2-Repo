@@ -20,12 +20,14 @@ log_success() { log "SUCCESS" "$1"; }
 log_info() { log "INFO" "$1"; }
 log_error() { log "ERROR" "$1"; }
 
-# Error handler (just logs and exits)
+# Error handler
 handle_error() {
   local exit_code=$?
   local message=$1
   log_error "${message} (Exit code: ${exit_code})"
-  log_error "Terraform failed! Run 'terraform destroy' manually if needed."
+  log_error "Terraform failed! Manual cleanup may be needed."
+  log_error "1. Check what resources were created"
+  log_error "2. Run 'terraform destroy' in ${REPO_DIR} if necessary"
   exit ${exit_code}
 }
 
@@ -56,19 +58,14 @@ install_dependencies() {
   log_success "All dependencies installed successfully"
 }
 
-# Remove Terraform locks
-remove_tf_locks() {
-  log_info "Cleaning up any Terraform lock files..."
-  local lockfiles=(
-    "${REPO_DIR}/.terraform.lock.hcl"
-    "${REPO_DIR}/terraform.tfstate.lock.info"
-  )
+# Remove only STATE lock (not dependency lock)
+remove_state_lock() {
+  local state_lock="${REPO_DIR}/terraform.tfstate.lock.info"
   
-  for lockfile in "${lockfiles[@]}"; do
-    if [[ -f "${lockfile}" ]]; then
-      rm -f "${lockfile}" || log_error "Failed to remove lock file: ${lockfile}"
-    fi
-  done
+  if [[ -f "${state_lock}" ]]; then
+    log_info "Removing stale Terraform state lock..."
+    rm -f "${state_lock}" || log_error "Failed to remove state lock (manual removal may be needed)"
+  fi
 }
 
 # Run Terraform operations
@@ -76,17 +73,18 @@ run_terraform() {
   log_info "Entering Terraform directory: ${REPO_DIR}"
   cd "${REPO_DIR}" || handle_error "Failed to enter Terraform directory"
   
-  remove_tf_locks
+  # Remove only state lock (preserve .terraform.lock.hcl)
+  remove_state_lock
   
   log_info "Running terraform init..."
   terraform init || handle_error "Terraform init failed"
   
-  remove_tf_locks
+  remove_state_lock
   
   log_info "Running terraform plan..."
   terraform plan -out=tfplan || handle_error "Terraform plan failed"
   
-  remove_tf_locks
+  remove_state_lock
   
   log_info "Running terraform apply..."
   terraform apply -auto-approve tfplan || handle_error "Terraform apply failed"
