@@ -1,89 +1,109 @@
 #!/bin/bash
+set -euo pipefail
 
-# Exit on any error
-set -e
-
-# Define log file
+# Configuration
 LOGFILE="/home/ec2-user/terraform-setup.log"
+REPO_DIR="/home/ec2-user/EC2-Repo"
 
-# Redirect stdout and stderr to log file and console
+# Initialize logging
 exec > >(tee -a "${LOGFILE}") 2>&1
+exec 2> >(tee -a "${LOGFILE}" >&2)
 
-# Function to log success messages with timestamp
-log_success() {
-  echo "$(date +'%Y-%m-%d %H:%M:%S') SUCCESS: $1"
+# Logging functions
+log() {
+  local level=$1
+  local message=$2
+  echo "$(date +'%Y-%m-%d %H:%M:%S') ${level}: ${message}"
 }
 
-# Function to log error messages with timestamp
-log_error() {
-  echo "$(date +'%Y-%m-%d %H:%M:%S') ERROR: $1"
-}
+log_success() { log "SUCCESS" "$1"; }
+log_info() { log "INFO" "$1"; }
+log_error() { log "ERROR" "$1"; }
 
-# Function to handle errors and exit
+# Error handler (just logs and exits)
 handle_error() {
-  log_error "$1"
-  exit 1
+  local exit_code=$?
+  local message=$1
+  log_error "${message} (Exit code: ${exit_code})"
+  log_error "Terraform failed! Run 'terraform destroy' manually if needed."
+  exit ${exit_code}
 }
 
-# Function to check if AWS CLI is configured
+# Check AWS CLI
 check_aws_cli() {
+  log_info "Verifying AWS CLI configuration..."
   if ! aws sts get-caller-identity >/dev/null 2>&1; then
-    handle_error "AWS CLI is not configured correctly or IAM role is not assigned."
+    handle_error "AWS CLI not configured or IAM role missing"
   fi
+  log_success "AWS CLI is properly configured"
 }
 
-# Function to install dependencies
+# Install dependencies
 install_dependencies() {
-  log_success "Installing dependencies..."
+  log_info "Updating system packages..."
   sudo yum update -y || handle_error "System update failed"
-  sudo yum install -y git yum-utils || handle_error "Dependency installation failed"
-
-  sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo || handle_error "Adding Terraform repo failed"
-  sudo yum -y install terraform || handle_error "Terraform installation failed"
-
-  log_success "AWS CLI is already pre-installed, skipping installation."
+  
+  log_info "Installing required packages..."
+  sudo yum install -y git yum-utils || handle_error "Package installation failed"
+  
+  log_info "Adding HashiCorp repository..."
+  sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo \
+    || handle_error "Failed to add HashiCorp repository"
+  
+  log_info "Installing Terraform..."
+  sudo yum install -y terraform || handle_error "Terraform installation failed"
+  
+  log_success "All dependencies installed successfully"
 }
 
-# Function to clone GitHub repo
-clone_repo() {
-  REPO_URL="https://github.com/drohit02/EC2-Repo.git"
-  REPO_DIR="/home/ec2-user/EC2-Repo"
-
-  log_success "Cloning GitHub repository..."
-  cd /home/ec2-user || handle_error "Cannot change to /home/ec2-user"
-
-  if [ -d "$REPO_DIR" ]; then
-    log_success "Repository already exists. Pulling latest changes..."
-    cd "$REPO_DIR" || handle_error "Cannot enter repo directory"
-    git pull || handle_error "Git pull failed"
-  else
-    git clone "$REPO_URL" || handle_error "Git clone failed"
-    cd "$REPO_DIR" || handle_error "Failed to enter repo directory"
-  fi
+# Remove Terraform locks
+remove_tf_locks() {
+  log_info "Cleaning up any Terraform lock files..."
+  local lockfiles=(
+    "${REPO_DIR}/.terraform.lock.hcl"
+    "${REPO_DIR}/terraform.tfstate.lock.info"
+  )
+  
+  for lockfile in "${lockfiles[@]}"; do
+    if [[ -f "${lockfile}" ]]; then
+      rm -f "${lockfile}" || log_error "Failed to remove lock file: ${lockfile}"
+    fi
+  done
 }
 
-# Function to run Terraform
+# Run Terraform operations
 run_terraform() {
-  log_success "Running Terraform..."
-
-  cd /home/ec2-user/EC2-Repo || handle_error "Cannot change to repo directory"
-
+  log_info "Entering Terraform directory: ${REPO_DIR}"
+  cd "${REPO_DIR}" || handle_error "Failed to enter Terraform directory"
+  
+  remove_tf_locks
+  
+  log_info "Running terraform init..."
   terraform init || handle_error "Terraform init failed"
+  
+  remove_tf_locks
+  
+  log_info "Running terraform plan..."
   terraform plan -out=tfplan || handle_error "Terraform plan failed"
-
-  # Uncomment this line if you want to save tfplan to S3
-  # aws s3 cp tfplan s3://my-terraform-state-bucket/tfplan || handle_error "Upload to S3 failed"
-
+  
+  remove_tf_locks
+  
+  log_info "Running terraform apply..."
   terraform apply -auto-approve tfplan || handle_error "Terraform apply failed"
+  
+  log_success "Terraform operations completed successfully"
 }
 
-# ---- Script Execution ---- #
+# Main execution
+main() {
+  log_info "Starting Terraform deployment"
+  
+  check_aws_cli
+  install_dependencies
+  run_terraform
+  
+  log_success "Terraform deployment completed successfully"
+  exit 0
+}
 
-log_success "Starting EC2 Terraform Provisioning Setup..."
-
-check_aws_cli
-install_dependencies
-clone_repo
-run_terraform
-
-log_success "Terraform deployment completed successfully!"
+main
