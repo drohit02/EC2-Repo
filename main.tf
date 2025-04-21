@@ -9,7 +9,7 @@ data "aws_vpc" "default" {
 }
 
 # Fetch existing Internet Gateway attached to the default VPC
-data "aws_internet_gateway" "default_igw" {
+data "aws_internet_gateway" "igw" {
   filter {
     name   = "attachment.vpc-id"
     values = [data.aws_vpc.default.id]
