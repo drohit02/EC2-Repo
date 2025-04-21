@@ -36,15 +36,17 @@ check_aws_cli() {
 install_dependencies() {
   log_success "Installing dependencies..."
   sudo yum update -y || handle_error "System update failed"
-  sudo yum install -y git yum-utils aws-cli || handle_error "Dependency installation failed"
-  
+  sudo yum install -y git yum-utils || handle_error "Dependency installation failed"
+
   sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo || handle_error "Adding Terraform repo failed"
   sudo yum -y install terraform || handle_error "Terraform installation failed"
+
+  log_success "AWS CLI is already pre-installed, skipping installation."
 }
 
 # Function to clone Bitbucket repo
 clone_repo() {
-  REPO_URL="https://<your-bitbucket-username>@bitbucket.org/<your-org>/<your-repo>.git"
+  REPO_URL="https://github.com/drohit02/EC2-Repo.git"
   REPO_DIR="/home/ec2-user/<your-repo>"
 
   log_success "Cloning Bitbucket repository..."
@@ -63,14 +65,13 @@ clone_repo() {
 # Function to run Terraform
 run_terraform() {
   log_success "Running Terraform..."
-  
-  # Make sure you are inside the repo directory
+
   cd /home/ec2-user/<your-repo> || handle_error "Cannot change to repo directory"
 
   terraform init || handle_error "Terraform init failed"
   terraform plan -out=tfplan || handle_error "Terraform plan failed"
 
-  # Optional: If you want to upload tfplan to S3
+  # Uncomment this line if you want to save tfplan to S3
   # aws s3 cp tfplan s3://my-terraform-state-bucket/tfplan || handle_error "Upload to S3 failed"
 
   terraform apply -auto-approve tfplan || handle_error "Terraform apply failed"
