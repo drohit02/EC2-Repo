@@ -7,7 +7,7 @@ set -e
 LOGFILE="/home/ec2-user/terraform-setup.log"
 
 # Redirect stdout and stderr to log file and console
-exec > >(tee -a ${LOGFILE}) 2>&1
+exec > >(tee -a "${LOGFILE}") 2>&1
 
 # Function to log success messages with timestamp
 log_success() {
@@ -44,16 +44,16 @@ install_dependencies() {
   log_success "AWS CLI is already pre-installed, skipping installation."
 }
 
-# Function to clone Bitbucket repo
+# Function to clone GitHub repo
 clone_repo() {
   REPO_URL="https://github.com/drohit02/EC2-Repo.git"
-  REPO_DIR="/home/ec2-user/<your-repo>"
+  REPO_DIR="/home/ec2-user/EC2-Repo"
 
-  log_success "Cloning Bitbucket repository..."
+  log_success "Cloning GitHub repository..."
   cd /home/ec2-user || handle_error "Cannot change to /home/ec2-user"
-  
+
   if [ -d "$REPO_DIR" ]; then
-    log_success "Repository already cloned. Pulling latest changes..."
+    log_success "Repository already exists. Pulling latest changes..."
     cd "$REPO_DIR" || handle_error "Cannot enter repo directory"
     git pull || handle_error "Git pull failed"
   else
@@ -66,7 +66,7 @@ clone_repo() {
 run_terraform() {
   log_success "Running Terraform..."
 
-  cd /home/ec2-user/<your-repo> || handle_error "Cannot change to repo directory"
+  cd /home/ec2-user/EC2-Repo || handle_error "Cannot change to repo directory"
 
   terraform init || handle_error "Terraform init failed"
   terraform plan -out=tfplan || handle_error "Terraform plan failed"
