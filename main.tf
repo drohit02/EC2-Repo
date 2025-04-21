@@ -24,7 +24,7 @@ data "aws_internet_gateway" "igw" {
 # Create Public Subnets
 resource "aws_subnet" "public_subnet_a" {
   vpc_id                  = data.aws_vpc.default.id
-  cidr_block              = "172.31.1.0/24"
+  cidr_block              = "172.31.6.0/24"
   availability_zone       = "ap-south-1a"
   map_public_ip_on_launch = true
 
