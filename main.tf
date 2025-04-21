@@ -1,6 +1,6 @@
 # Configure the AWS Provider
 provider "aws" {
-  region = "ap-south-1" # Ensure this is your preferred region
+  region = "ap-south-1"
 }
 
 # Fetch the default VPC
@@ -8,22 +8,24 @@ data "aws_vpc" "default" {
   default = true
 }
 
-# Fetch existing Internet Gateway attached to the default VPC
+# Fetch existing Internet Gateway attached to the default VPC (filtered by VPC and Name tag)
 data "aws_internet_gateway" "igw" {
   filter {
     name   = "attachment.vpc-id"
     values = [data.aws_vpc.default.id]
   }
-  tags  = {
-    Name = "my-manual-internet-gateway"
+
+  filter {
+    name   = "tag:Name"
+    values = ["my-manual-internet-gateway"]
   }
 }
 
-# Create Public Subnets with non-overlapping CIDR blocks
+# Create Public Subnets
 resource "aws_subnet" "public_subnet_a" {
   vpc_id                  = data.aws_vpc.default.id
-  cidr_block              = "172.31.1.0/24" # Adjusted CIDR block
-  availability_zone       = "ap-south-1a"   # Ensure you are using valid AZ
+  cidr_block              = "172.31.1.0/24"
+  availability_zone       = "ap-south-1a"
   map_public_ip_on_launch = true
 
   tags = {
@@ -33,8 +35,8 @@ resource "aws_subnet" "public_subnet_a" {
 
 resource "aws_subnet" "public_subnet_b" {
   vpc_id                  = data.aws_vpc.default.id
-  cidr_block              = "172.31.2.0/24" # Adjusted CIDR block
-  availability_zone       = "ap-south-1b"   # Ensure you are using valid AZ
+  cidr_block              = "172.31.2.0/24"
+  availability_zone       = "ap-south-1b"
   map_public_ip_on_launch = true
 
   tags = {
@@ -42,10 +44,10 @@ resource "aws_subnet" "public_subnet_b" {
   }
 }
 
-# Create Private Subnets with non-overlapping CIDR blocks
+# Create Private Subnets
 resource "aws_subnet" "private_subnet_x" {
   vpc_id            = data.aws_vpc.default.id
-  cidr_block        = "172.31.3.0/24" # Adjusted CIDR block
+  cidr_block        = "172.31.3.0/24"
   availability_zone = "ap-south-1a"
 
   tags = {
@@ -55,7 +57,7 @@ resource "aws_subnet" "private_subnet_x" {
 
 resource "aws_subnet" "private_subnet_y" {
   vpc_id            = data.aws_vpc.default.id
-  cidr_block        = "172.31.4.0/24" # Adjusted CIDR block
+  cidr_block        = "172.31.4.0/24"
   availability_zone = "ap-south-1b"
 
   tags = {
@@ -65,10 +67,10 @@ resource "aws_subnet" "private_subnet_y" {
 
 # Create Elastic IP for NAT Gateway
 resource "aws_eip" "nat_eip" {
-  domain = "vpc" # Correct way to associate EIP with VPC
+  domain = "vpc"
 }
 
-# Create NAT Gateway in one of the public subnets
+# Create NAT Gateway in public subnet
 resource "aws_nat_gateway" "nat_gateway" {
   allocation_id = aws_eip.nat_eip.id
   subnet_id     = aws_subnet.public_subnet_a.id
@@ -84,7 +86,7 @@ resource "aws_route_table" "public_route_table" {
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
+    gateway_id = data.aws_internet_gateway.igw.id
   }
 
   tags = {
