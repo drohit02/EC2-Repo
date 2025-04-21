@@ -8,12 +8,14 @@ data "aws_vpc" "default" {
   default = true
 }
 
-# Create Internet Gateway (since there is no IGW now)
-resource "aws_internet_gateway" "igw" {
-  vpc_id = data.aws_vpc.default.id
-
-  tags = {
-    Name = "default-igw"
+# Fetch existing Internet Gateway attached to the default VPC
+data "aws_internet_gateway" "default_igw" {
+  filter {
+    name   = "attachment.vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
+  tags  = {
+    Name = "my-manual-internet-gateway"
   }
 }
 
